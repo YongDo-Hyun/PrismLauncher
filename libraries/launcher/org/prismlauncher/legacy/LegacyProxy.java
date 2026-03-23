@@ -55,12 +55,54 @@ package org.prismlauncher.legacy;
 import org.prismlauncher.launcher.Launcher;
 import org.prismlauncher.utils.Parameters;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 // used as a fallback if NewLaunchLegacy is not on the classpath
-// if it is, this class will be replaced
 public final class LegacyProxy {
+    private static final String LEGACY_PROXY_CLASS = "org.prismlauncher.legacyshim.LegacyProxy";
+
     public static Launcher createLauncher(Parameters params) {
-        throw new AssertionError("NewLaunchLegacy is not loaded");
+        Class<?> proxyClass = loadProxyClass();
+
+        if (proxyClass == null)
+            throw new AssertionError("NewLaunchLegacy is not loaded");
+
+        try {
+            Method method = proxyClass.getMethod("createLauncher", Parameters.class);
+
+            return (Launcher) method.invoke(null, params);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Failed to invoke NewLaunchLegacy", unwrapReflectionException(e));
+        }
     }
 
-    public static void applyOnlineFixes(Parameters params) {}
+    public static void applyOnlineFixes(Parameters params) {
+        Class<?> proxyClass = loadProxyClass();
+
+        if (proxyClass == null)
+            return;
+
+        try {
+            Method method = proxyClass.getMethod("applyOnlineFixes", Parameters.class);
+            method.invoke(null, params);
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Failed to invoke NewLaunchLegacy", unwrapReflectionException(e));
+        }
+    }
+
+    private static Class<?> loadProxyClass() {
+        try {
+            return Class.forName(LEGACY_PROXY_CLASS);
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
+    }
+
+    private static Throwable unwrapReflectionException(ReflectiveOperationException e) {
+        if (e instanceof InvocationTargetException && e.getCause() != null)
+            return e.getCause();
+
+        return e;
+    }
 }
